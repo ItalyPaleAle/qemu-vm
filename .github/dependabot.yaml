@@ -11,6 +11,9 @@ updates:
       timezone: Etc/UTC
     labels:
       - dependencies
+    commit-message:
+      prefix: fix
+      include: scope
     groups:
       base-images:
         patterns:

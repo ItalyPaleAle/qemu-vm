@@ -4,11 +4,13 @@ A container image that runs one KVM virtual machine in its foreground. Stopping 
 
 The image has no VM-specific logic. Everything about a VM comes in through the environment variables, devices and mounts below, and a Podman Quadlet `.container` unit is the intended way to run it.
 
+<!-- x-release-please-start-version -->
 ```text
 ghcr.io/italypaleale/qemu-vm:v0.1.0
 ```
+<!-- x-release-please-end -->
 
-Only `v*` tags are published, so a pinned version never changes underneath a host.
+Only release tags are published, so a pinned version never changes underneath a host. See [Releasing](#releasing).
 
 ## Contract
 
@@ -110,6 +112,7 @@ An I/O error on the disk pauses the guest instead of passing the error on to its
 
 ## Example Quadlet unit
 
+<!-- x-release-please-start-version -->
 ```ini
 [Unit]
 Description=Example virtual machine
@@ -140,6 +143,7 @@ TimeoutStopSec=150
 [Install]
 WantedBy=multi-user.target
 ```
+<!-- x-release-please-end -->
 
 ## Development
 
@@ -149,6 +153,22 @@ WantedBy=multi-user.target
 sudo podman build -t localhost/qemu-vm:test -f Containerfile .
 sudo ./test/smoke.sh localhost/qemu-vm:test
 ```
+
+## Releasing
+
+Releases are cut by [release-please](https://github.com/googleapis/release-please) from [Conventional Commits](https://www.conventionalcommits.org/) on `main`:
+
+1. A `fix:` or `feat:` commit makes release-please open, or update, a release PR. The PR bumps the version, updates `CHANGELOG.md`, and rewrites the image references in this README.
+2. Merging that PR tags `vX.Y.Z` and creates the GitHub release. The same workflow then runs the tests again on that commit and publishes `vX.Y.Z`, `vX.Y` and `sha-<commit>` to GHCR.
+
+What each commit type does:
+
+- **`fix:`:** a patch release. Dependabot's base image updates are committed as `fix(deps):`, so merging one leads to a patch release.
+- **`feat:`:** a minor release.
+- **A breaking change:** also a minor release while the version is below 1.0.0.
+- **Other types**, such as `ci:`, `docs:` and `chore:`, don't cause a release.
+
+To publish an existing tag again, for example after a failed publish, run the Publish workflow by hand with that tag.
 
 ## AI disclosure
 
