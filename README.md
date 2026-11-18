@@ -6,7 +6,7 @@ The image has no VM-specific logic. Everything about a VM comes in through the e
 
 <!-- x-release-please-start-version -->
 ```text
-ghcr.io/italypaleale/qemu-vm:v0.1.0
+ghcr.io/italypaleale/qemu-vm:v0.0.0
 ```
 <!-- x-release-please-end -->
 
@@ -121,7 +121,7 @@ After=dev-disk-by\x2did-example.device
 
 [Container]
 ContainerName=example
-Image=ghcr.io/italypaleale/qemu-vm:v0.1.0
+Image=ghcr.io/italypaleale/qemu-vm:v0.0.0
 Network=vmlan.network
 AddDevice=/dev/kvm
 AddDevice=/dev/net/tun
