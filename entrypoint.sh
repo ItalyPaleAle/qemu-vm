@@ -22,7 +22,7 @@ VM_NET_IF="${VM_NET_IF:-eth0}"
 VM_STOP_TIMEOUT="${VM_STOP_TIMEOUT:-120}"
 VM_INSTALL_ISO="${VM_INSTALL_ISO:-}"
 VM_INSTALL_POLL="${VM_INSTALL_POLL:-10}"
-VM_CLOUD_IMAGE_URL="${VM_CLOUD_IMAGE_URL:-}"
+VM_CLOUD_IMAGE="${VM_CLOUD_IMAGE:-}"
 VM_CLOUD_IMAGE_SHA256="${VM_CLOUD_IMAGE_SHA256:-}"
 VM_SHARES="${VM_SHARES:-}"
 VM_EXTRA_ARGS="${VM_EXTRA_ARGS:-}"
@@ -53,8 +53,10 @@ validate() {
   [[ "$VM_INSTALL_POLL" =~ ^[1-9][0-9]*$ ]] || fail "VM_INSTALL_POLL must be a positive integer, in seconds"
   VM_MAC="${VM_MAC,,}"
   [[ "$VM_MAC" =~ ^([0-9a-f]{2}:){5}[0-9a-f]{2}$ ]] || fail "VM_MAC must be a MAC address such as 02:00:00:00:00:01"
-  if [ -n "$VM_CLOUD_IMAGE_URL" ] || [ -n "$VM_CLOUD_IMAGE_SHA256" ]; then
-    [ -n "$VM_CLOUD_IMAGE_URL" ] || fail "VM_CLOUD_IMAGE_URL must be set together with VM_CLOUD_IMAGE_SHA256"
+  if [ -n "$VM_CLOUD_IMAGE" ] || [ -n "$VM_CLOUD_IMAGE_SHA256" ]; then
+    if [ -z "$VM_CLOUD_IMAGE" ] || [ -z "$VM_CLOUD_IMAGE_SHA256" ]; then
+      fail "VM_CLOUD_IMAGE and VM_CLOUD_IMAGE_SHA256 must be set together"
+    fi
     VM_CLOUD_IMAGE_SHA256="${VM_CLOUD_IMAGE_SHA256,,}"
     [[ "$VM_CLOUD_IMAGE_SHA256" =~ ^[0-9a-f]{64}$ ]] || fail "VM_CLOUD_IMAGE_SHA256 must be a SHA-256 hex digest"
   fi
@@ -153,19 +155,13 @@ disk_is_blank() {
 }
 
 # provision_cloud_image writes a verified cloud image onto the blank disk
+# The host puts the image in place, because the container's only interface belongs to the guest and it has no network of its own
 provision_cloud_image() {
-  local image="$STATE_DIR/cloud-image"
+  local image="$VM_CLOUD_IMAGE"
+  wait_for_file "$image" "the cloud image"
 
-  if [ ! -f "$image" ] || ! echo "$VM_CLOUD_IMAGE_SHA256  $image" | sha256sum -c --status; then
-    log "Downloading the cloud image from $VM_CLOUD_IMAGE_URL"
-    rm -f "$image" "$image.part"
-    curl -fsSL --retry 5 --retry-delay 5 -o "$image.part" "$VM_CLOUD_IMAGE_URL" &
-    child_pid=$!
-    wait "$child_pid" || fail "the cloud image could not be downloaded"
-    child_pid=""
-    echo "$VM_CLOUD_IMAGE_SHA256  $image.part" | sha256sum -c --status || fail "the cloud image does not match VM_CLOUD_IMAGE_SHA256"
-    mv "$image.part" "$image"
-  fi
+  # The digest is checked here too, since a file the host has not finished writing would otherwise end up on the disk
+  echo "$VM_CLOUD_IMAGE_SHA256  $image" | sha256sum -c --status || fail "$image does not match VM_CLOUD_IMAGE_SHA256"
 
   local format
   format="$(qemu-img info "$image" | sed -n 's/^file format: //p')"
@@ -186,17 +182,18 @@ provision_cloud_image() {
   child_pid=""
   provisioning=0
 
-  # The image is only needed again after a rebuild, and keeping it would hold hundreds of megabytes on the host for nothing
-  rm -f "$image"
+  # The image is left where the host put it, so a rebuild needs no download
   log "The cloud image was written, and the guest grows its root filesystem to fill the disk on first boot"
 }
 
-# wait_for_install_iso keeps the container running until the installer is copied in, so the service stays healthy meanwhile
-wait_for_install_iso() {
+# wait_for_file keeps the container running until a provisioning source appears, so the service stays healthy meanwhile
+wait_for_file() {
+  local path="$1"
+  local what="$2"
   local announced=0
-  while [ ! -f "$VM_INSTALL_ISO" ]; do
+  while [ ! -f "$path" ]; do
     if [ "$announced" = 0 ]; then
-      log "The disk is blank, so the virtual machine starts once $VM_INSTALL_ISO exists"
+      log "The disk is blank, so the virtual machine starts once $what exists at $path"
       announced=1
     fi
     pause "$VM_INSTALL_POLL"
@@ -286,14 +283,14 @@ main() {
 
   local attach_install=0
   if disk_is_blank; then
-    if [ -n "$VM_CLOUD_IMAGE_URL" ]; then
+    if [ -n "$VM_CLOUD_IMAGE" ]; then
       provision_cloud_image
     elif [ -n "$VM_INSTALL_ISO" ]; then
-      wait_for_install_iso
+      wait_for_file "$VM_INSTALL_ISO" "the installer"
       attach_install=1
       log "The disk is blank, so the installer $VM_INSTALL_ISO is attached for this boot"
     else
-      log "ERROR: the disk is blank and neither VM_CLOUD_IMAGE_URL nor VM_INSTALL_ISO says how to provision it"
+      log "ERROR: the disk is blank and neither VM_CLOUD_IMAGE nor VM_INSTALL_ISO says how to provision it"
       exit 2
     fi
   fi

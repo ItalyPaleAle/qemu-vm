@@ -35,6 +35,11 @@ truncate -s 8G "$work/disk.img"
 loop="$(losetup --find --show "$work/disk.img")"
 
 mkdir -p "$work/state" "$work/seed"
+
+# The host downloads the image in production too, because the container has no network of its own
+echo "Downloading the cloud image"
+curl -fsSL --retry 5 -o "$work/state/cloud-image.qcow2" "$cloud_image_url"
+echo "$cloud_image_sha256  $work/state/cloud-image.qcow2" | sha256sum -c --status
 cat > "$work/seed/meta-data" <<EOF
 instance-id: smoke
 local-hostname: smoke
@@ -61,7 +66,7 @@ podman run -d --name "$name" \
   -e VM_MEMORY=2048 \
   -e VM_MAC=02:00:00:00:00:01 \
   -e VM_STOP_TIMEOUT=90 \
-  -e VM_CLOUD_IMAGE_URL="$cloud_image_url" \
+  -e VM_CLOUD_IMAGE=/vm/state/cloud-image.qcow2 \
   -e VM_CLOUD_IMAGE_SHA256="$cloud_image_sha256" \
   "$image" >/dev/null
 

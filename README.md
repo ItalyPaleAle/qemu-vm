@@ -24,9 +24,9 @@ Only `v*` tags are published, so a pinned version never changes underneath a hos
 | `VM_NET_IF` | no | Container interface handed to the guest (default `eth0`) |
 | `VM_STOP_TIMEOUT` | no | Seconds the guest gets to power off after a stop, before QEMU is quit (default `120`) |
 | `VM_INSTALL_ISO` | no | Installer attached as a CD-ROM, only when the disk is blank |
-| `VM_INSTALL_POLL` | no | Seconds between checks for `VM_INSTALL_ISO` while waiting for it (default `10`) |
-| `VM_CLOUD_IMAGE_URL` | no | qcow2 or raw image written onto the disk, only when the disk is blank |
-| `VM_CLOUD_IMAGE_SHA256` | with the URL | SHA-256 the downloaded image must match |
+| `VM_CLOUD_IMAGE` | no | Path of a qcow2 or raw image, normally under `/vm/state`, written onto the disk only when the disk is blank |
+| `VM_CLOUD_IMAGE_SHA256` | with the image | SHA-256 the image must match before it is written |
+| `VM_INSTALL_POLL` | no | Seconds between checks for `VM_INSTALL_ISO` or `VM_CLOUD_IMAGE` while waiting for it (default `10`) |
 | `VM_SHARES` | no | Host directories exported over virtiofs, as `tag:/path[,tag:/path]` |
 | `VM_EXTRA_ARGS` | no | Extra QEMU arguments, split on whitespace with no quoting |
 
@@ -47,7 +47,7 @@ Under SELinux, the container's default `container_t` type can't open a raw block
 
 | Path | Mode | Contents |
 | --- | --- | --- |
-| `/vm/state` | rw, persistent | `efivars.fd` (UEFI variables), `console.log` (serial console), and the cloud image while it is being written |
+| `/vm/state` | rw, persistent | `efivars.fd` (UEFI variables), `console.log` (serial console), and usually the installer or the cloud image |
 | `/vm/seed` | ro, optional | `meta-data`, `user-data` and `network-config`, attached as a NoCloud `cidata` disk |
 | each `VM_SHARES` path | rw | the directory exported to the guest |
 
@@ -75,9 +75,13 @@ The host can't reach a macvlan guest over the LAN, which is a property of macvla
 
 At every start, `blkid -p` checks whether the disk is blank: no partition table and no filesystem.
 
-- **With a cloud image:** the image is downloaded into `/vm/state`, verified against `VM_CLOUD_IMAGE_SHA256`, written onto the disk, and deleted again.
-- **With an installer:** `VM_INSTALL_ISO` is attached for that boot. If the file doesn't exist yet, the container waits for it.
+- **With a cloud image:** `VM_CLOUD_IMAGE` is verified against `VM_CLOUD_IMAGE_SHA256` and written onto the disk. The file is left in place, so a rebuild doesn't need it again.
+- **With an installer:** `VM_INSTALL_ISO` is attached for that boot.
 - **With neither:** the container exits with status 2.
+
+Either way, if the file doesn't exist yet, the container waits for it.
+
+The container never downloads anything. Its only interface belongs to the guest, so the host is the one that fetches the image, for example while installing the unit.
 
 A disk that isn't blank is never touched, and an installer is never attached to it, so an unattended installer can't wipe an installed system.
 
