@@ -1,0 +1,4 @@
+# The signal handlers are only ever called from trap, which shellcheck cannot follow and reports as unreachable code
+disable=SC2317
+# QEMU separates the sub-options of one argument with commas, which shellcheck mistakes for a badly written array
+disable=SC2054

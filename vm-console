@@ -1,0 +1,13 @@
+#!/bin/bash
+# Attaches the terminal to the guest's serial console, and Ctrl-] detaches again
+# Run it inside the container: podman exec -it <name> vm-console
+set -euo pipefail
+
+socket=/run/vm/console.sock
+if [ ! -S "$socket" ]; then
+  echo "The serial console is not available yet, because the virtual machine has not started" >&2
+  exit 1
+fi
+
+echo "Connected to the serial console, press Ctrl-] to detach" >&2
+exec socat -,raw,echo=0,escape=0x1d "UNIX-CONNECT:$socket"

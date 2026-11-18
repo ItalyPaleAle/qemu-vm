@@ -1,0 +1,20 @@
+#!/bin/bash
+# Sends one QMP command to the running virtual machine and prints QEMU's reply
+# Run it inside the container, for example to resume a guest paused by a storage error: podman exec <name> vm-qmp cont
+set -euo pipefail
+
+command="${1:?usage: vm-qmp <command>, such as cont, stop, system_powerdown or query-status}"
+socket=/run/vm/qmp.sock
+if [ ! -S "$socket" ]; then
+  echo "The QMP socket is not available yet, because the virtual machine has not started" >&2
+  exit 1
+fi
+if [[ ! "$command" =~ ^[a-z][a-z0-9_-]*$ ]]; then
+  echo "\"$command\" is not a QMP command name" >&2
+  exit 1
+fi
+
+# The first line of the reply is QEMU's greeting and the second answers the handshake, so only the last one is the command's
+printf '{"execute":"qmp_capabilities"}\n{"execute":"%s"}\n' "$command" \
+  | socat -t 2 - "UNIX-CONNECT:$socket" \
+  | tail -n 1

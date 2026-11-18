@@ -1,0 +1,17 @@
+version: 2
+
+updates:
+  # Base images in Containerfile
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Etc/UTC
+    labels:
+      - dependencies
+    groups:
+      base-images:
+        patterns:
+          - "*"
