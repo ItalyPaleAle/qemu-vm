@@ -224,15 +224,23 @@ start_shares() {
     socket="$RUN_DIR/virtiofs-$tag.sock"
     rm -f "$socket"
     # The container is the sandbox already, and virtiofsd's own one needs privileges a container does not have
-    "$VIRTIOFSD" --socket-path="$socket" --shared-dir="$path" --sandbox=none --cache=auto >&2 &
-    share_pids+=("$!")
+    # virtiofsd also insists on keeping CAP_MKNOD and, to use file handles, CAP_DAC_READ_SEARCH, neither of which Podman grants by default
+    # Without both flags it exits on start, and the share works without them: the guest cannot create device nodes, and inodes are tracked by open file
+    "$VIRTIOFSD" --socket-path="$socket" --shared-dir="$path" --sandbox=none --cache=auto \
+      --inode-file-handles=never --modcaps=-mknod >&2 &
+    local pid=$!
+    share_pids+=("$pid")
 
     waited=0
     until [ -S "$socket" ]; do
+      kill -0 "$pid" 2>/dev/null || fail "virtiofsd exited before it was ready for the share $tag, see its error above"
       [ "$waited" -lt 100 ] || fail "virtiofsd did not start for the share $tag"
       sleep 0.1
       waited=$((waited + 1))
     done
+    # virtiofsd creates its socket before it drops its capabilities, so a failure there only shows once it is gone
+    sleep 1
+    kill -0 "$pid" 2>/dev/null || fail "virtiofsd exited before it was ready for the share $tag, see its error above"
     log "Share: $path is exported to the guest with the tag $tag"
     share_args+=(-chardev "socket,id=fs-$tag,path=$(qemu_path "$socket")" -device "vhost-user-fs-pci,chardev=fs-$tag,tag=$tag")
   done

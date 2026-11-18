@@ -41,7 +41,9 @@ Only release tags are published, so a pinned version never changes underneath a 
 | `/dev/vhost-net` | Moves the guest's network traffic in the kernel |
 | `/dev/vm-disk` (or `VM_DISK`) | The guest's disk, normally a raw block device such as an iSCSI LUN |
 
-The container needs `CAP_NET_ADMIN` to rewire its interface. virtiofsd runs with `--sandbox=none`, since the container is already the sandbox, and needs nothing beyond Podman's default capabilities.
+The container needs `CAP_NET_ADMIN` to rewire its interface. That's the only capability it adds to Podman's defaults:
+- **virtiofsd's sandbox:** virtiofsd runs with `--sandbox=none`, because the container is already the sandbox.
+- **virtiofsd's own capability list:** by default, virtiofsd also insists on `CAP_MKNOD` and `CAP_DAC_READ_SEARCH`, so it runs with `--modcaps=-mknod` and `--inode-file-handles=never` to stay within Podman's defaults. As a result, a guest can't create device nodes on a share, and virtiofsd tracks inodes by open file instead of by file handle. Many filesystems, such as NFS, don't support file handles anyway.
 
 Under SELinux, the container's default `container_t` type can't open a raw block device or `/dev/kvm`, so run it with `--security-opt label=disable` (`SecurityLabelDisable=true` in Quadlet).
 
